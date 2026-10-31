@@ -98,6 +98,38 @@ final class FirstMouseButton: NSButton {
 
 final class FirstMouseTextView: NSTextView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// Notes are non-activating panels, so the main menu may not see shortcuts.
+    /// Handle the editing ones here as a fallback.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let key = event.charactersIgnoringModifiers?.lowercased()
+        if mods == .command {
+            switch key {
+            case "x": cut(nil); return true
+            case "c": copy(nil); return true
+            case "v": paste(nil); return true
+            case "a": selectAll(nil); return true
+            case "z": undoManager?.undo(); return true
+            default: break
+            }
+        } else if mods == [.command, .shift], key == "z" {
+            undoManager?.redo(); return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// Right-click menu with just the editing basics.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Cut", action: #selector(cut(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Select All", action: #selector(selectAll(_:)), keyEquivalent: "")
+        return menu
+    }
 }
 
 /// Bottom-right grip for resizing.
@@ -348,6 +380,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        buildMainMenu()
         buildStatusItem()
         let saved = NoteStore.shared.load()
         if saved.isEmpty {
@@ -359,6 +392,29 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         NoteStore.shared.save(controllers.map(\.note), immediately: true)
+    }
+
+    /// Menu-bar-only apps have no main menu by default, so ⌘C/⌘V/⌘X/⌘A/⌘Z
+    /// never reach the text view. A hidden Edit menu wires them up.
+    private func buildMainMenu() {
+        let main = NSMenu()
+        let editItem = NSMenuItem()
+        main.addItem(editItem)
+
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let plain = edit.addItem(withTitle: "Paste and Match Style", action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "v")
+        plain.keyEquivalentModifierMask = [.command, .option, .shift]
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+
+        NSApp.mainMenu = main
     }
 
     private func buildStatusItem() {
