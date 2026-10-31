@@ -9,6 +9,7 @@ Tiny native sticky notes for macOS. Notes live on your desktop, you can drag the
 - **Persistent**: text, position, size and color are saved automatically
 - **Lives on the desktop**: notes sit just above your desktop icons, behind other windows, and show on every Space
 - **Float mode**: turn on *Float Above Windows* in the menu bar to keep notes on top
+- **Copy & paste**: ⌘C / ⌘X / ⌘V / ⌘A / ⌘Z work as usual, or right-click for Cut, Copy, Paste
 - **6 colors**: click the 🎨 button to cycle through them
 - **Menu bar app**: no Dock icon. Use the menu bar icon for *New Note* (⌘N), *Show All Notes*, *Open at Login*, and *Quit*
 
