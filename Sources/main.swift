@@ -81,11 +81,23 @@ final class NoteWindow: NSPanel {
 /// The header strip: dragging it moves the note.
 final class HeaderView: NSView {
     var fill: NSColor = .clear { didSet { needsDisplay = true } }
-    override var mouseDownCanMoveWindow: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
     override func draw(_ dirtyRect: NSRect) {
         fill.setFill()
         bounds.fill()
     }
+}
+
+/// Buttons that respond to the first click even when the note isn't focused.
+final class FirstMouseButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+final class FirstMouseTextView: NSTextView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Bottom-right grip for resizing.
@@ -93,6 +105,8 @@ final class ResizeGrip: NSView {
     var onResizeEnd: (() -> Void)?
     private var startMouse: NSPoint = .zero
     private var startFrame: NSRect = .zero
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.black.withAlphaComponent(0.25).setStroke()
@@ -135,7 +149,7 @@ final class NoteController: NSObject, NSWindowDelegate, NSTextViewDelegate {
     var note: Note
     let window: NoteWindow
     private let header = HeaderView()
-    private let textView = NSTextView()
+    private let textView = FirstMouseTextView()
     private let scrollView = NSScrollView()
     private let grip = ResizeGrip()
     weak var app: AppController?
@@ -237,7 +251,7 @@ final class NoteController: NSObject, NSWindowDelegate, NSTextViewDelegate {
     private func makeButton(symbol: String, tip: String, action: Selector) -> NSButton {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)?
             .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
-        let b = NSButton(image: image ?? NSImage(), target: self, action: action)
+        let b = FirstMouseButton(image: image ?? NSImage(), target: self, action: action)
         b.isBordered = false
         b.contentTintColor = NSColor(white: 0.25, alpha: 1)
         b.toolTip = tip
@@ -253,8 +267,9 @@ final class NoteController: NSObject, NSWindowDelegate, NSTextViewDelegate {
     }
 
     /// Desktop level sits just above the desktop icons, behind normal app windows.
+    /// The note you're editing is lifted above everything so it's never hidden.
     func applyLevel(floating: Bool) {
-        if floating {
+        if floating || window.isKeyWindow {
             window.level = .floating
         } else {
             window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
@@ -267,6 +282,7 @@ final class NoteController: NSObject, NSWindowDelegate, NSTextViewDelegate {
 
     func focus() {
         NSApp.activate(ignoringOtherApps: true)
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(textView)
     }
@@ -307,6 +323,8 @@ final class NoteController: NSObject, NSWindowDelegate, NSTextViewDelegate {
 
     // MARK: Delegates
 
+    func windowDidBecomeKey(_ notification: Notification) { applyLevel(floating: app?.floatOnTop ?? false) }
+    func windowDidResignKey(_ notification: Notification) { applyLevel(floating: app?.floatOnTop ?? false) }
     func windowDidMove(_ notification: Notification) { syncFrame() }
     func windowDidEndLiveResize(_ notification: Notification) { syncFrame() }
 
